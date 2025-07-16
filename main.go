@@ -44,7 +44,7 @@ func main() {
 	}
 	answer := &dns.Answer{
 		NAME:     "google.com",
-		TYPE:     "A",
+		TYPE:     "SOA",
 		CLASS:    "IN",
 		TTL:      60,
 		RDLENGTH: 4,

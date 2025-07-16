@@ -3,6 +3,7 @@ package dns
 import (
 	"encoding/binary"
 	"fmt"
+	"strconv"
 )
 
 /*
@@ -58,15 +59,13 @@ func DecodeAnswer(payload []byte, questionSize int) (*Answer, error) {
 
 	ttlPosition := START_POS + domainSize + 4
 	ttl := binary.BigEndian.Uint32(payload[ttlPosition:])
-	// not sure if is necessary to take care of the sign bit
-	// ttl |= 1 << 31
 
 	rdlengthPosition := START_POS + domainSize + 8
 	rdlength := binary.BigEndian.Uint16(payload[rdlengthPosition:])
 
 	rdataPosition := START_POS + domainSize + 10
 	endRdataPosition := rdataPosition + int(rdlength)
-	rdata := string(payload[rdataPosition:endRdataPosition])
+	rdata := decodeData(payload[rdataPosition:endRdataPosition], int(rdlength))
 
 	return &Answer{
 		NAME:     domain,
@@ -130,4 +129,16 @@ func (a *Answer) buildData() ([]byte, error) {
 	}
 
 	return buf, nil
+}
+
+func decodeData(buf []byte, length int) string {
+	str := ""
+	for i := range length {
+		str += strconv.Itoa(int(buf[i]))
+		if i < length-1 {
+			str += "."
+		}
+	}
+
+	return str
 }
