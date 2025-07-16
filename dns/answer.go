@@ -55,23 +55,23 @@ func (a *Answer) EncodeAnswer() ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
-	buf = append(buf, binary.BigEndian.AppendUint16(buf, recordType)...)
+	buf = binary.BigEndian.AppendUint16(buf, recordType)
 
 	// CLASS
 	recordClass, err := getRecordClassUint16(a.CLASS)
 	if err != nil {
 		return []byte{}, err
 	}
-	buf = append(buf, binary.BigEndian.AppendUint16(buf, recordClass)...)
+	buf = binary.BigEndian.AppendUint16(buf, recordClass)
 
 	// TTL
 	// not sure about this, this need a signed 32 bit, but the sign should allways be positive (think in binary level can just change the LSB to 1)
 	uintTTL := uint32(a.TTL)
 	uintTTL |= 1 << 31
-	buf = append(buf, binary.BigEndian.AppendUint32(buf, uint32(a.TTL))...)
+	buf = binary.BigEndian.AppendUint32(buf, uint32(a.TTL))
 
 	// RDLENGTH
-	buf = append(buf, binary.BigEndian.AppendUint16(buf, a.RDLENGTH)...)
+	buf = binary.BigEndian.AppendUint16(buf, a.RDLENGTH)
 
 	// RDATA
 	rdata, err := a.buildData()

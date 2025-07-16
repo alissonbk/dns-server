@@ -49,7 +49,6 @@ func (m *Message) EncodeMessage() ([]byte, error) {
 	// fmt.Println("question: ", question)
 	// fmt.Println("question encoded: ", hex.EncodeToString(question))
 	buf = append(buf, question...)
-	fmt.Println("question length: ", len(question))
 
 	answer, err := m.Answer.EncodeAnswer()
 	if err != nil {

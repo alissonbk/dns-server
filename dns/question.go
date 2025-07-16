@@ -89,15 +89,14 @@ func (q *Question) EncodeQuestion() ([]byte, error) {
 	if err != nil {
 		return buf, err
 	}
-	buf = append(buf, binary.BigEndian.AppendUint16(buf, qtype)...)
+	buf = binary.BigEndian.AppendUint16(buf, qtype)
 
 	qclass, err := getRecordClassUint16(q.QCLASS)
 	if err != nil {
 		return buf, err
 	}
-	buf = append(buf, binary.BigEndian.AppendUint16(buf, qclass)...)
+	buf = binary.BigEndian.AppendUint16(buf, qclass)
 
-	fmt.Println("question: ", buf[:])
 	fmt.Println("question encoded: ", hex.EncodeToString(buf[:]))
 	return buf, nil
 }
