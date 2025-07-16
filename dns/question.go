@@ -60,13 +60,13 @@ func DecodeQuestion(payload []byte) (*Question, error) {
 		return nil, fmt.Errorf("failed to decode domain name, cause: %s", err)
 	}
 
-	typePosition := START_POS + (domainSize - 1)
+	typePosition := START_POS + (domainSize)
 	qtype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
 	if err != nil {
 		return nil, fmt.Errorf("could not parse the QTYPE, cause: %s", err)
 	}
 
-	classPosition := START_POS + (domainSize - 1) + 2
+	classPosition := START_POS + (domainSize) + 2
 	class, err := getRecordClassString(binary.BigEndian.Uint16(payload[classPosition:]))
 	if err != nil {
 		return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
