@@ -45,21 +45,45 @@ Classes:
 type Question struct {
 	// Domain name, see { utils.formatDomainName }
 	QNAME string
-	// Record type
+	// Record type (16 bits)
 	QTYPE string
-	// Class
+	// Class  (16 bits)
 	QCLASS string
+	// Useful to know the boundaries of the question section in the payload as QNAME have dynamic size
+	Size int
 }
 
 func DecodeQuestion(payload []byte) (*Question, error) {
-	question := &Question{}
+	const START_POS = 12
+	domain, domainSize, err := decodeDomainName(payload[START_POS:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode domain name, cause: %s", err)
+	}
 
-	fmt.Println(payload)
-	return question, nil
+	typePosition := START_POS + (domainSize - 1)
+	qtype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
+	if err != nil {
+		return nil, fmt.Errorf("could not parse the QTYPE, cause: %s", err)
+	}
+
+	classPosition := START_POS + (domainSize - 1) + 2
+	class, err := getRecordClassString(binary.BigEndian.Uint16(payload[classPosition:]))
+	if err != nil {
+		return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
+	}
+	return &Question{
+		QNAME:  domain,
+		QTYPE:  qtype,
+		QCLASS: class,
+		Size:   domainSize + 4,
+	}, nil
 }
 
 func (q *Question) EncodeQuestion() ([]byte, error) {
-	buf := bytesFromDomainName(q.QNAME)
+	buf, err := bytesFromDomainName(q.QNAME)
+	if err != nil {
+		return buf, err
+	}
 
 	qtype, err := getRecordTypeUint16(q.QTYPE)
 	if err != nil {

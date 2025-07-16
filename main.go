@@ -58,6 +58,11 @@ func main() {
 	}
 
 	staticResponse, err := message.EncodeMessage()
+	decodedQuestion, err := dns.DecodeQuestion(staticResponse)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("decodedQuestion: ", decodedQuestion)
 	if err != nil {
 		panic("could not build the static response, cause: " + err.Error())
 	}

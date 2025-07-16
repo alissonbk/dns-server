@@ -36,7 +36,7 @@ type Answer struct {
 	RDATA string
 }
 
-func DecodeAnswer(payload []byte) (*Answer, error) {
+func DecodeAnswer(payload []byte, questionSize int) (*Answer, error) {
 	answer := &Answer{}
 
 	fmt.Println(payload)
@@ -45,7 +45,10 @@ func DecodeAnswer(payload []byte) (*Answer, error) {
 
 func (a *Answer) EncodeAnswer() ([]byte, error) {
 	// DOMAIN
-	buf := bytesFromDomainName(a.NAME)
+	buf, err := bytesFromDomainName(a.NAME)
+	if err != nil {
+		return buf, err
+	}
 
 	// TYPE
 	recordType, err := getRecordTypeUint16(a.TYPE)

@@ -2,7 +2,6 @@ package dns
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 )
 
@@ -59,15 +58,13 @@ func (h *Header) EncodeHeader() ([]byte, error) {
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed to set header flags, cause: %e", err)
 	}
-	fmt.Println("flags: ", flags)
+
 	binary.BigEndian.PutUint16(buf[2:4], flags)
 	binary.BigEndian.PutUint16(buf[4:6], h.QDCOUNT)
 	binary.BigEndian.PutUint16(buf[6:8], h.ANCOUNT)
 	binary.BigEndian.PutUint16(buf[8:10], h.NSCOUNT)
 	binary.BigEndian.PutUint16(buf[10:12], h.ARCOUNT)
 
-	fmt.Println("header: ", buf[:])
-	fmt.Println("header encoded: ", hex.EncodeToString(buf[:]))
 	return buf[:], nil
 }
 
