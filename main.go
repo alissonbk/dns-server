@@ -58,14 +58,22 @@ func main() {
 	}
 
 	staticResponse, err := message.EncodeMessage()
+	if err != nil {
+		panic("could not build the static response, cause: " + err.Error())
+	}
+
 	decodedQuestion, err := dns.DecodeQuestion(staticResponse)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println("decodedQuestion: ", decodedQuestion)
+
+	decodedAnswer, err := dns.DecodeAnswer(staticResponse, decodedQuestion.Size)
 	if err != nil {
-		panic("could not build the static response, cause: " + err.Error())
+		panic(err)
 	}
+	fmt.Println("decodedAnswer: ", decodedAnswer)
+
 	for {
 		size, source, err := udpConn.ReadFromUDP(buf)
 		if err != nil {

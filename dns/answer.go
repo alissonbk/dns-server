@@ -37,10 +37,45 @@ type Answer struct {
 }
 
 func DecodeAnswer(payload []byte, questionSize int) (*Answer, error) {
-	answer := &Answer{}
+	// 12 for the header...
+	START_POS := 12 + questionSize
+	domain, domainSize, err := decodeDomainName(payload[START_POS:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decoded the domain, cause: %s", err)
+	}
 
-	fmt.Println(payload)
-	return answer, nil
+	typePosition := START_POS + domainSize
+	ttype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
+	if err != nil {
+		return nil, fmt.Errorf("could not parse the QTYPE, cause: %s", err)
+	}
+
+	classPosition := START_POS + domainSize + 2
+	class, err := getRecordClassString(binary.BigEndian.Uint16(payload[classPosition:]))
+	if err != nil {
+		return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
+	}
+
+	ttlPosition := START_POS + domainSize + 4
+	ttl := binary.BigEndian.Uint32(payload[ttlPosition:])
+	// not sure if is necessary to take care of the sign bit
+	// ttl |= 1 << 31
+
+	rdlengthPosition := START_POS + domainSize + 8
+	rdlength := binary.BigEndian.Uint16(payload[rdlengthPosition:])
+
+	rdataPosition := START_POS + domainSize + 10
+	endRdataPosition := rdataPosition + int(rdlength)
+	rdata := string(payload[rdataPosition:endRdataPosition])
+
+	return &Answer{
+		NAME:     domain,
+		TYPE:     ttype,
+		CLASS:    class,
+		TTL:      int32(ttl),
+		RDLENGTH: rdlength,
+		RDATA:    rdata,
+	}, nil
 }
 
 func (a *Answer) EncodeAnswer() ([]byte, error) {
