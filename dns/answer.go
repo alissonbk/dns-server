@@ -37,6 +37,7 @@ type Answer struct {
 	RDATA string
 }
 
+// Useful for debugging and testing, but the client will never send an answer...
 func DecodeAnswer(payload []byte, questionSize int) (*Answer, error) {
 	// 12 for the header...
 	START_POS := 12 + questionSize

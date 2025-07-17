@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"slices"
+	"strings"
 )
 
 /*
@@ -49,36 +51,88 @@ type Question struct {
 	QTYPE string
 	// Class  (16 bits)
 	QCLASS string
+	// compress the domain name (need to have QNAME matching previous QNAME questions in the payload context)
+	Compress bool
+	// Useful to facilitate using pointer in the compression
+	DomainNameBoundaries [2]int
 	// Useful to know the boundaries of the question section in the payload as QNAME have dynamic size
 	Size int
 }
 
-func DecodeQuestion(payload []byte) (*Question, error) {
-	const START_POS = 12
-	domain, domainSize, err := decodeDomainName(payload[START_POS:])
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode domain name, cause: %s", err)
+func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
+	const START_OFFSET = 12
+	questions := make([]Question, qdcount)
+
+	for i := range qdcount {
+		startPos := START_OFFSET
+		// check for pointers
+		if i != 0 {
+			firstByte := payload[startPos : startPos+1][0]
+			if firstByte>>7 == 0x01 && firstByte>>6 == 0x01 {
+				// need to encode to be able to test this
+				fmt.Println("found a pointer")
+			}
+		}
+
+		domain, domainSize, err := decodeDomainName(payload[startPos:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode domain name, cause: %s", err)
+		}
+
+		typePosition := START_OFFSET + domainSize
+		qtype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
+		if err != nil {
+			return nil, fmt.Errorf("could not parse the QTYPE, cause: %s", err)
+		}
+
+		classPosition := START_OFFSET + domainSize + 2
+		class, err := getRecordClassString(binary.BigEndian.Uint16(payload[classPosition:]))
+		if err != nil {
+			return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
+		}
+
+		questions = append(questions, Question{
+			QNAME:                domain,
+			QTYPE:                qtype,
+			QCLASS:               class,
+			DomainNameBoundaries: [2]int{startPos, startPos + domainSize},
+			Size:                 domainSize + 4,
+		})
 	}
 
-	typePosition := START_POS + domainSize
-	qtype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
-	if err != nil {
-		return nil, fmt.Errorf("could not parse the QTYPE, cause: %s", err)
-	}
-
-	classPosition := START_POS + domainSize + 2
-	class, err := getRecordClassString(binary.BigEndian.Uint16(payload[classPosition:]))
-	if err != nil {
-		return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
-	}
-	return &Question{
-		QNAME:  domain,
-		QTYPE:  qtype,
-		QCLASS: class,
-		Size:   domainSize + 4,
-	}, nil
+	return questions, nil
 }
 
+func EncodeQuestions(questions []Question) ([]byte, error) {
+	var buf []byte
+	for i, question := range questions {
+		if i == 0 {
+			b, err := question.EncodeQuestion()
+			if err != nil {
+				return []byte{}, err
+			}
+			buf = b
+			continue
+		}
+		if question.Compress {
+			questionIdx := slices.IndexFunc(questions, func(q Question) bool {
+				return strings.Contains(q.QNAME, question.QNAME)
+			})
+			// TODO: now i need to check the byte offset where the string should start to point it to
+			idx := questions[questionIdx]
+			fmt.Println(idx)
+		}
+		b, err := question.EncodeQuestion()
+		if err != nil {
+			return []byte{}, err
+		}
+		buf = append(buf, b...)
+	}
+
+	return buf, nil
+}
+
+// should be private after fix testings
 func (q *Question) EncodeQuestion() ([]byte, error) {
 	buf, err := bytesFromDomainName(q.QNAME)
 	if err != nil {

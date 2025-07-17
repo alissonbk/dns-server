@@ -37,10 +37,17 @@ func main() {
 		NSCOUNT: 0,
 		ARCOUNT: 0,
 	}
-	question := &dns.Question{
-		QNAME:  "google.com",
-		QTYPE:  "A",
-		QCLASS: "IN",
+	question1 := &dns.Question{
+		QNAME:    "fodase.google.com",
+		QTYPE:    "A",
+		QCLASS:   "IN",
+		Compress: false,
+	}
+	question2 := &dns.Question{
+		QNAME:    "google.com",
+		QTYPE:    "A",
+		QCLASS:   "IN",
+		Compress: true,
 	}
 	answer := &dns.Answer{
 		NAME:     "google.com",
@@ -52,9 +59,9 @@ func main() {
 	}
 
 	message := &dns.Message{
-		Header:   header,
-		Question: question,
-		Answer:   answer,
+		Header:    header,
+		Questions: []dns.Question{*question1, *question2},
+		Answer:    answer,
 	}
 
 	staticResponse, err := message.EncodeMessage()
@@ -62,13 +69,18 @@ func main() {
 		panic("could not build the static response, cause: " + err.Error())
 	}
 
-	decodedQuestion, err := dns.DecodeQuestion(staticResponse)
+	decodedHeader, err := dns.DecodeHeader(staticResponse)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("decodedQuestion: ", decodedQuestion)
 
-	decodedAnswer, err := dns.DecodeAnswer(staticResponse, decodedQuestion.Size)
+	decodedQuestions, err := dns.DecodeQuestions(staticResponse, int(decodedHeader.QDCOUNT))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("decodedQuestion: ", decodedQuestions)
+
+	decodedAnswer, err := dns.DecodeAnswer(staticResponse, decodedQuestions[0].Size)
 	if err != nil {
 		panic(err)
 	}

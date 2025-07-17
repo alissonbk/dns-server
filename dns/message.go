@@ -6,9 +6,12 @@ import (
 )
 
 type Message struct {
-	Header   *Header
-	Question *Question
-	Answer   *Answer
+	Header *Header
+	// keeping the single ones just for testing
+	Question  *Question
+	Answer    *Answer
+	Questions []Question
+	Answers   []Answer
 }
 
 func DecodeMessage(payload []byte) (*Message, error) {
@@ -19,17 +22,18 @@ func DecodeMessage(payload []byte) (*Message, error) {
 	}
 	message.Header = decodedHeader
 
-	decodedQuestion, err := DecodeQuestion(payload)
+	decodedQuestions, err := DecodeQuestions(payload, int(decodedHeader.QDCOUNT))
 	if err != nil {
 		return message, err
 	}
-	message.Question = decodedQuestion
+	message.Questions = decodedQuestions
 
-	decodedAnswer, err := DecodeAnswer(payload, decodedQuestion.Size)
+	// FIXME: handle multiple and fix start size from multiple questions
+	decodedAnswers, err := DecodeAnswer(payload, decodedQuestions[0].Size)
 	if err != nil {
 		return message, err
 	}
-	message.Answer = decodedAnswer
+	message.Answers = []Answer{*decodedAnswers}
 
 	return message, nil
 }
@@ -40,14 +44,14 @@ func (m *Message) EncodeMessage() ([]byte, error) {
 		return []byte{}, err
 	}
 	// fmt.Println("header: ", buf)
-	// fmt.Println("header encoded: ", hex.EncodeToString(buf))
+	fmt.Println("header encoded: ", hex.EncodeToString(buf))
 
 	question, err := m.Question.EncodeQuestion()
 	if err != nil {
 		return []byte{}, err
 	}
 	// fmt.Println("question: ", question)
-	// fmt.Println("question encoded: ", hex.EncodeToString(question))
+	fmt.Println("question encoded: ", hex.EncodeToString(question))
 	buf = append(buf, question...)
 
 	answer, err := m.Answer.EncodeAnswer()
