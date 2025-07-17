@@ -24,7 +24,7 @@ func FormatHexTraillingZeros(hex string, desiredLength int) string {
 // google.com -> \x06google\x03com\x00 -> 06 67 6f 6f 67 6c 65 03 63 6f 6d 00 -> label 1: \x06google, label 2: \x03com, null byte: \x00
 // TODO: DNS labels have a 63 octets limit
 // TODO: names have a 255 octets limit
-func bytesFromDomainName(name string) ([]byte, error) {
+func encodeDomainName(name string) ([]byte, error) {
 	var buf []byte
 	splitted := strings.SplitSeq(name, ".")
 	for domainPart := range splitted {

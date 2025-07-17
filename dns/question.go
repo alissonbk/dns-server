@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"iter"
 	"slices"
 	"strings"
 )
@@ -107,22 +108,37 @@ func EncodeQuestions(questions []Question) ([]byte, error) {
 	var buf []byte
 	for i, question := range questions {
 		if i == 0 {
-			b, err := question.EncodeQuestion()
+			b, err := question.EncodeQuestion([]byte{})
 			if err != nil {
 				return []byte{}, err
 			}
 			buf = b
 			continue
 		}
+		// still need to handle the case where it has a sequence of labels, ending with a pointer
 		if question.Compress {
 			questionIdx := slices.IndexFunc(questions, func(q Question) bool {
 				return strings.Contains(q.QNAME, question.QNAME)
 			})
 			// TODO: now i need to check the byte offset where the string should start to point it to
-			idx := questions[questionIdx]
-			fmt.Println(idx)
+			parentQuestion := questions[questionIdx]
+			pointerOffset := findCompressionPointerOffset(
+				strings.SplitSeq(question.QNAME, "."),
+				strings.SplitSeq(parentQuestion.QNAME, "."),
+				parentQuestion.DomainNameBoundaries[0],
+			)
+
+			pointerOffset |= 1 << 7
+			pointerOffset |= 1 << 6
+
+			b, err := question.EncodeQuestion([]byte{byte(pointerOffset)})
+			if err != nil {
+				return []byte{}, err
+			}
+			buf = append(buf, b...)
+			continue
 		}
-		b, err := question.EncodeQuestion()
+		b, err := question.EncodeQuestion([]byte{})
 		if err != nil {
 			return []byte{}, err
 		}
@@ -133,10 +149,15 @@ func EncodeQuestions(questions []Question) ([]byte, error) {
 }
 
 // should be private after fix testings
-func (q *Question) EncodeQuestion() ([]byte, error) {
-	buf, err := bytesFromDomainName(q.QNAME)
-	if err != nil {
-		return buf, err
+func (q *Question) EncodeQuestion(compressedQNAME []byte) ([]byte, error) {
+	var buf []byte
+	if len(compressedQNAME) > 0 {
+		buf = compressedQNAME
+	} else {
+		buf, err := encodeDomainName(q.QNAME)
+		if err != nil {
+			return buf, err
+		}
 	}
 
 	qtype, err := getRecordTypeUint16(q.QTYPE)
@@ -153,4 +174,20 @@ func (q *Question) EncodeQuestion() ([]byte, error) {
 
 	fmt.Println("question encoded: ", hex.EncodeToString(buf[:]))
 	return buf, nil
+}
+
+func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing iter.Seq[string], parentQuestionStartOffset int) int {
+	discardSize := 0
+	for parentPart := range splitParent {
+		for compressingPart := range splitCompressing {
+			// mb could use contains, but i think should at least have 1 full equal part
+			if parentPart == compressingPart {
+				return parentQuestionStartOffset + discardSize
+			}
+		}
+		// + 1 for the length byte
+		discardSize += len([]rune(parentPart)) + 1
+	}
+
+	return -1
 }

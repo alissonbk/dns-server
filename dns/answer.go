@@ -80,7 +80,7 @@ func DecodeAnswer(payload []byte, questionSize int) (*Answer, error) {
 
 func (a *Answer) EncodeAnswer() ([]byte, error) {
 	// DOMAIN
-	buf, err := bytesFromDomainName(a.NAME)
+	buf, err := encodeDomainName(a.NAME)
 	if err != nil {
 		return buf, err
 	}
