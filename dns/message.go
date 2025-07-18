@@ -46,7 +46,7 @@ func (m *Message) EncodeMessage() ([]byte, error) {
 	// fmt.Println("header: ", buf)
 	fmt.Println("header encoded: ", hex.EncodeToString(buf))
 
-	question, err := m.Question.EncodeQuestion()
+	question, err := EncodeQuestions(m.Questions)
 	if err != nil {
 		return []byte{}, err
 	}

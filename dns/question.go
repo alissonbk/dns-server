@@ -117,24 +117,29 @@ func EncodeQuestions(questions []Question) ([]byte, error) {
 		}
 		// still need to handle the case where it has a sequence of labels, ending with a pointer
 		if question.Compress {
-			questionIdx := slices.IndexFunc(questions, func(q Question) bool {
+			filteredQuestions := filterIndex(questions, i)
+			questionIdx := slices.IndexFunc(filteredQuestions, func(q Question) bool {
 				return strings.Contains(q.QNAME, question.QNAME)
 			})
-			// TODO: now i need to check the byte offset where the string should start to point it to
+
 			parentQuestion := questions[questionIdx]
+			// still needs to sum with all the payload before it
 			pointerOffset := findCompressionPointerOffset(
-				strings.SplitSeq(question.QNAME, "."),
 				strings.SplitSeq(parentQuestion.QNAME, "."),
+				strings.Split(question.QNAME, "."),
 				parentQuestion.DomainNameBoundaries[0],
 			)
 
+			fmt.Println("pointer offset before shift", pointerOffset)
 			pointerOffset |= 1 << 7
 			pointerOffset |= 1 << 6
 
+			fmt.Println("compressed question", pointerOffset)
 			b, err := question.EncodeQuestion([]byte{byte(pointerOffset)})
 			if err != nil {
 				return []byte{}, err
 			}
+
 			buf = append(buf, b...)
 			continue
 		}
@@ -176,17 +181,19 @@ func (q *Question) EncodeQuestion(compressedQNAME []byte) ([]byte, error) {
 	return buf, nil
 }
 
-func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing iter.Seq[string], parentQuestionStartOffset int) int {
+func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing []string, parentQuestionStartOffset int) int {
+	const lengthByte = 1
 	discardSize := 0
 	for parentPart := range splitParent {
-		for compressingPart := range splitCompressing {
+		for _, compressingPart := range splitCompressing {
 			// mb could use contains, but i think should at least have 1 full equal part
 			if parentPart == compressingPart {
-				return parentQuestionStartOffset + discardSize
+				// + 1 for the length byte
+				return parentQuestionStartOffset + discardSize + lengthByte
 			}
 		}
 		// + 1 for the length byte
-		discardSize += len([]rune(parentPart)) + 1
+		discardSize += len([]rune(parentPart)) + lengthByte
 	}
 
 	return -1
