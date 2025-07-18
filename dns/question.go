@@ -55,7 +55,7 @@ type Question struct {
 	// compress the domain name (need to have QNAME matching previous QNAME questions in the payload context)
 	Compress bool
 	// Useful to facilitate using pointer in the compression
-	DomainNameBoundaries [2]int
+	DomainNameSize int
 	// Useful to know the boundaries of the question section in the payload as QNAME have dynamic size
 	Size int
 }
@@ -93,11 +93,11 @@ func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
 		}
 
 		questions = append(questions, Question{
-			QNAME:                domain,
-			QTYPE:                qtype,
-			QCLASS:               class,
-			DomainNameBoundaries: [2]int{startPos, startPos + domainSize},
-			Size:                 domainSize + 4,
+			QNAME:          domain,
+			QTYPE:          qtype,
+			QCLASS:         class,
+			DomainNameSize: domainSize,
+			Size:           domainSize + 4,
 		})
 	}
 
@@ -118,16 +118,16 @@ func EncodeQuestions(questions []Question) ([]byte, error) {
 		// still need to handle the case where it has a sequence of labels, ending with a pointer
 		if question.Compress {
 			filteredQuestions := filterIndex(questions, i)
-			questionIdx := slices.IndexFunc(filteredQuestions, func(q Question) bool {
+			parentQuestionIdx := slices.IndexFunc(filteredQuestions, func(q Question) bool {
 				return strings.Contains(q.QNAME, question.QNAME)
 			})
 
-			parentQuestion := questions[questionIdx]
+			parentQuestion := questions[parentQuestionIdx]
 			// still needs to sum with all the payload before it
 			pointerOffset := findCompressionPointerOffset(
 				strings.SplitSeq(parentQuestion.QNAME, "."),
 				strings.Split(question.QNAME, "."),
-				parentQuestion.DomainNameBoundaries[0],
+				sumPayloadOffsetUntilParentDomainName(questions, parentQuestionIdx),
 			)
 
 			fmt.Println("pointer offset before shift", pointerOffset)
@@ -156,14 +156,19 @@ func EncodeQuestions(questions []Question) ([]byte, error) {
 // should be private after fix testings
 func (q *Question) EncodeQuestion(compressedQNAME []byte) ([]byte, error) {
 	var buf []byte
+	domainSize := 0
 	if len(compressedQNAME) > 0 {
 		buf = compressedQNAME
+		domainSize = 1
 	} else {
-		buf, err := encodeDomainName(q.QNAME)
+		b, err := encodeDomainName(q.QNAME)
 		if err != nil {
 			return buf, err
 		}
+		domainSize = len(b)
+		buf = b
 	}
+	q.DomainNameSize = domainSize
 
 	qtype, err := getRecordTypeUint16(q.QTYPE)
 	if err != nil {
@@ -181,20 +186,32 @@ func (q *Question) EncodeQuestion(compressedQNAME []byte) ([]byte, error) {
 	return buf, nil
 }
 
-func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing []string, parentQuestionStartOffset int) int {
+// payloadOffset is the offset relative to all the message before the starting point of the parentPayload which contains the domain name
+func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing []string, payloadOffset int) int {
 	const lengthByte = 1
 	discardSize := 0
 	for parentPart := range splitParent {
 		for _, compressingPart := range splitCompressing {
-			// mb could use contains, but i think should at least have 1 full equal part
 			if parentPart == compressingPart {
-				// + 1 for the length byte
-				return parentQuestionStartOffset + discardSize + lengthByte
+				if discardSize > 0 {
+					return payloadOffset + discardSize + lengthByte
+				}
+				return payloadOffset + discardSize
 			}
 		}
-		// + 1 for the length byte
+
 		discardSize += len([]rune(parentPart)) + lengthByte
 	}
 
 	return -1
+}
+
+func sumPayloadOffsetUntilParentDomainName(questions []Question, idx int) int {
+	const headerSize = 12
+	s := 0
+	for i := range idx {
+		s += questions[i].Size
+	}
+
+	return s + headerSize
 }

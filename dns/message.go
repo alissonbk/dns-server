@@ -46,13 +46,13 @@ func (m *Message) EncodeMessage() ([]byte, error) {
 	// fmt.Println("header: ", buf)
 	fmt.Println("header encoded: ", hex.EncodeToString(buf))
 
-	question, err := EncodeQuestions(m.Questions)
+	questions, err := EncodeQuestions(m.Questions)
 	if err != nil {
 		return []byte{}, err
 	}
 	// fmt.Println("question: ", question)
-	fmt.Println("question encoded: ", hex.EncodeToString(question))
-	buf = append(buf, question...)
+	fmt.Println("questions encoded: ", hex.EncodeToString(questions))
+	buf = append(buf, questions...)
 
 	answer, err := m.Answer.EncodeAnswer()
 	if err != nil {
