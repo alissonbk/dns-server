@@ -65,14 +65,15 @@ func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
 	questions := make([]Question, qdcount)
 
 	for i := range qdcount {
-		startPos := START_OFFSET
+		startPos := sumPayloadOffsetUntilParentDomainName(questions, i)
 		// check for pointers
-		if i != 0 {
-			firstByte := payload[startPos : startPos+1][0]
-			if firstByte>>7 == 0x01 && firstByte>>6 == 0x01 {
-				// need to encode to be able to test this
-				fmt.Println("found a pointer")
-			}
+		firstByte := payload[startPos : startPos+1][0]
+
+		// hex(3) == binary(1 1)
+		if firstByte>>6 == 0x03 {
+			pointer := int(firstByte & 0x3F)
+			// FIXME: the encoding is ignoring the length byte somewhere, shouldn't need to do -1 here if the encoding was correct
+			startPos = pointer - 1
 		}
 
 		domain, domainSize, err := decodeDomainName(payload[startPos:])
@@ -80,6 +81,7 @@ func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
 			return nil, fmt.Errorf("failed to decode domain name, cause: %s", err)
 		}
 
+		fmt.Println(domain)
 		typePosition := START_OFFSET + domainSize
 		qtype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
 		if err != nil {
@@ -92,13 +94,13 @@ func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
 			return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
 		}
 
-		questions = append(questions, Question{
+		questions[i] = Question{
 			QNAME:          domain,
 			QTYPE:          qtype,
 			QCLASS:         class,
 			DomainNameSize: domainSize,
 			Size:           domainSize + 4,
-		})
+		}
 	}
 
 	return questions, nil
@@ -130,11 +132,10 @@ func EncodeQuestions(questions []Question) ([]byte, error) {
 				sumPayloadOffsetUntilParentDomainName(questions, parentQuestionIdx),
 			)
 
-			fmt.Println("pointer offset before shift", pointerOffset)
+			// set 2 first bits to 1 as the flag to identify a compression pointer
 			pointerOffset |= 1 << 7
 			pointerOffset |= 1 << 6
 
-			fmt.Println("compressed question", pointerOffset)
 			b, err := question.EncodeQuestion([]byte{byte(pointerOffset)})
 			if err != nil {
 				return []byte{}, err

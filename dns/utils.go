@@ -1,6 +1,7 @@
 package dns
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -52,10 +53,11 @@ func encodeDomainName(name string) ([]byte, error) {
 func decodeDomainName(buf []byte) (string, int, error) {
 	str := ""
 	curr := 0
+	fmt.Println("domain hex: ", hex.EncodeToString(buf))
 	for curr < 256 && buf[curr] != 0x00 {
 		n := int(buf[curr])
 		if n > 63 {
-			return "", 0, fmt.Errorf("label has more than 63 octets.")
+			return "", 0, fmt.Errorf("label has more than 63 octets")
 		}
 		str += string(buf[curr : curr+n+1])
 		str += "."

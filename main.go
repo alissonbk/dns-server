@@ -32,7 +32,7 @@ func main() {
 		RA:      false,
 		Z:       0,
 		RCODE:   0,
-		QDCOUNT: 1,
+		QDCOUNT: 2,
 		ANCOUNT: 1,
 		NSCOUNT: 0,
 		ARCOUNT: 0,
@@ -51,7 +51,7 @@ func main() {
 	}
 	answer := &dns.Answer{
 		NAME:     "google.com",
-		TYPE:     "SOA",
+		TYPE:     "A",
 		CLASS:    "IN",
 		TTL:      60,
 		RDLENGTH: 4,
@@ -78,7 +78,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("decodedQuestion: ", decodedQuestions)
+	fmt.Println("decodedQuestions: ", decodedQuestions)
 
 	decodedAnswer, err := dns.DecodeAnswer(staticResponse, decodedQuestions[0].Size)
 	if err != nil {
