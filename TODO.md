@@ -1,0 +1,1 @@
+- Need to handle better compression. By now it's only compressing the full name of the "compressed" domain, but it could have a non matching label with another compressed part example (parent: google.com) (compressed: something.google.com) should compress to 0x09...0xC0 considering C0 as a pointer to the beginning of parent domain with the flag bits setted;
