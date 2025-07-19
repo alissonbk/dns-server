@@ -2,7 +2,6 @@ package dns
 
 import (
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"iter"
 	"slices"
@@ -61,19 +60,18 @@ type Question struct {
 }
 
 func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
-	const START_OFFSET = 12
 	questions := make([]Question, qdcount)
 
 	for i := range qdcount {
-		startPos := sumPayloadOffsetUntilParentDomainName(questions, i)
+		previousPayloadOffset := sumPayloadOffsetUntilParentDomainName(questions, i)
+		startPos := previousPayloadOffset
 		// check for pointers
 		firstByte := payload[startPos : startPos+1][0]
-
+		flaggedAsCompressed := firstByte>>6 == 0x03
 		// hex(3) == binary(1 1)
-		if firstByte>>6 == 0x03 {
+		if flaggedAsCompressed {
 			pointer := int(firstByte & 0x3F)
-			// FIXME: the encoding is ignoring the length byte somewhere, shouldn't need to do -1 here if the encoding was correct
-			startPos = pointer - 1
+			startPos = pointer
 		}
 
 		domain, domainSize, err := decodeDomainName(payload[startPos:])
@@ -81,14 +79,17 @@ func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
 			return nil, fmt.Errorf("failed to decode domain name, cause: %s", err)
 		}
 
-		fmt.Println(domain)
-		typePosition := START_OFFSET + domainSize
+		if flaggedAsCompressed {
+			domainSize = 1
+		}
+
+		typePosition := previousPayloadOffset + domainSize
 		qtype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
 		if err != nil {
 			return nil, fmt.Errorf("could not parse the QTYPE, cause: %s", err)
 		}
 
-		classPosition := START_OFFSET + domainSize + 2
+		classPosition := previousPayloadOffset + domainSize + 2
 		class, err := getRecordClassString(binary.BigEndian.Uint16(payload[classPosition:]))
 		if err != nil {
 			return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
@@ -183,7 +184,6 @@ func (q *Question) EncodeQuestion(compressedQNAME []byte) ([]byte, error) {
 	}
 	buf = binary.BigEndian.AppendUint16(buf, qclass)
 
-	fmt.Println("question encoded: ", hex.EncodeToString(buf[:]))
 	return buf, nil
 }
 
@@ -195,7 +195,7 @@ func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing
 		for _, compressingPart := range splitCompressing {
 			if parentPart == compressingPart {
 				if discardSize > 0 {
-					return payloadOffset + discardSize + lengthByte
+					return payloadOffset + discardSize
 				}
 				return payloadOffset + discardSize
 			}

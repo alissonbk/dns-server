@@ -1,7 +1,6 @@
 package dns
 
 import (
-	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -31,7 +30,7 @@ func encodeDomainName(name string) ([]byte, error) {
 	for domainPart := range splitted {
 		runes := []rune(domainPart)
 		if len(runes) > 63 {
-			return []byte{}, fmt.Errorf("the domain part %s has more than 63 octets.", domainPart)
+			return []byte{}, fmt.Errorf("the domain part %s has more than 63 octets", domainPart)
 		}
 		buf = append(buf, byte(len(runes)))
 		for _, r := range runes {
@@ -39,7 +38,7 @@ func encodeDomainName(name string) ([]byte, error) {
 		}
 
 		if len(buf) > 255 {
-			return []byte{}, fmt.Errorf("the domain %s has more than 255 octets.", name)
+			return []byte{}, fmt.Errorf("the domain %s has more than 255 octets", name)
 		}
 	}
 
@@ -53,7 +52,6 @@ func encodeDomainName(name string) ([]byte, error) {
 func decodeDomainName(buf []byte) (string, int, error) {
 	str := ""
 	curr := 0
-	fmt.Println("domain hex: ", hex.EncodeToString(buf))
 	for curr < 256 && buf[curr] != 0x00 {
 		n := int(buf[curr])
 		if n > 63 {

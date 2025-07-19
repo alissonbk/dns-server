@@ -45,7 +45,7 @@ func main() {
 	}
 	question2 := &dns.Question{
 		QNAME:    "google.com",
-		QTYPE:    "A",
+		QTYPE:    "NULL",
 		QCLASS:   "IN",
 		Compress: true,
 	}
