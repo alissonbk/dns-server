@@ -37,8 +37,8 @@ type Header struct {
 	ARCOUNT uint16
 }
 
-func DecodeHeader(payload []byte) (*Header, error) {
-	header := &Header{
+func DecodeHeader(payload []byte) (Header, error) {
+	header := Header{
 		ID:      binary.BigEndian.Uint16(payload),
 		QDCOUNT: binary.BigEndian.Uint16(payload[4:6]),
 		ANCOUNT: binary.BigEndian.Uint16(payload[6:8]),

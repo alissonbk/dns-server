@@ -8,7 +8,7 @@ import (
 )
 
 func createStaticMessage() *dns.Message {
-	header := &dns.Header{
+	header := dns.Header{
 		ID:      1234,
 		QR:      true,
 		OPCODE:  0,
@@ -19,17 +19,17 @@ func createStaticMessage() *dns.Message {
 		Z:       0,
 		RCODE:   0,
 		QDCOUNT: 2,
-		ANCOUNT: 1,
+		ANCOUNT: 2,
 		NSCOUNT: 0,
 		ARCOUNT: 0,
 	}
-	question1 := dns.Question{
+	question1 := &dns.Question{
 		QNAME:    "fodase.google.com",
 		QTYPE:    "A",
 		QCLASS:   "IN",
 		Compress: false,
 	}
-	question2 := dns.Question{
+	question2 := &dns.Question{
 		QNAME:    "google.com",
 		QTYPE:    "NULL",
 		QCLASS:   "IN",
@@ -50,11 +50,12 @@ func createStaticMessage() *dns.Message {
 		TTL:      60,
 		RDLENGTH: 4,
 		RDATA:    "8.8.8.8",
+		Compress: true,
 	}
 
 	return &dns.Message{
 		Header:    header,
-		Questions: []dns.Question{question1, question2},
+		Questions: []*dns.Question{question1, question2},
 		Answers:   []dns.Answer{answer1, answer2},
 	}
 
@@ -76,27 +77,14 @@ func main() {
 
 	buf := make([]byte, 512)
 	staticResponse, err := createStaticMessage().EncodeMessage()
-
 	if err != nil {
 		panic("could not build the static response, cause: " + err.Error())
 	}
-
-	decodedHeader, err := dns.DecodeHeader(staticResponse)
+	decodedMessage, err := dns.DecodeMessage(staticResponse)
 	if err != nil {
-		panic(err)
+		panic("could not decode the static response, cause: " + err.Error())
 	}
-
-	decodedQuestions, err := dns.DecodeQuestions(staticResponse, int(decodedHeader.QDCOUNT))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("decodedQuestions: ", decodedQuestions)
-
-	decodedAnswer, err := dns.DecodeAnswer(staticResponse, decodedQuestions)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("decodedAnswer: ", decodedAnswer)
+	fmt.Println("decoded message ", decodedMessage)
 
 	for {
 		size, source, err := udpConn.ReadFromUDP(buf)

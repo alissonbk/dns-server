@@ -59,19 +59,19 @@ type Question struct {
 	Size int
 }
 
-func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
-	questions := make([]Question, qdcount)
+func DecodeQuestions(payload []byte, qdcount int) ([]*Question, error) {
+	questions := make([]*Question, qdcount)
 
 	for i := range qdcount {
 		previousPayloadOffset := sumQuestionPayloadOffsetUntilIdx(questions, i)
 		startPos := previousPayloadOffset
+
 		// check for pointers
-		firstByte := payload[startPos : startPos+1][0]
+		firstByte := payload[startPos]
 		flaggedAsCompressed := firstByte>>6 == 0x03
-		// hex(3) == binary(1 1)
 		if flaggedAsCompressed {
-			pointer := int(firstByte & 0x3F)
-			startPos = pointer
+			// pointer
+			startPos = int(firstByte & 0x3F)
 		}
 
 		domain, domainSize, err := decodeDomainName(payload[startPos:])
@@ -95,25 +95,26 @@ func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
 			return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
 		}
 
-		questions[i] = Question{
+		questions[i] = &Question{
 			QNAME:          domain,
 			QTYPE:          qtype,
 			QCLASS:         class,
 			DomainNameSize: domainSize,
 			Size:           domainSize + 4,
+			Compress:       flaggedAsCompressed,
 		}
 	}
 
 	return questions, nil
 }
 
-func EncodeQuestions(questions []Question) ([]byte, error) {
+func EncodeQuestions(questions []*Question) ([]byte, error) {
 	var buf []byte
 	for i, question := range questions {
 		// still need to handle the case where it has a sequence of labels, ending with a pointer
-		if question.Compress {
+		if (*question).Compress {
 			filteredQuestions := filterIndexOut(questions, i)
-			parentQuestionIdx := slices.IndexFunc(filteredQuestions, func(q Question) bool {
+			parentQuestionIdx := slices.IndexFunc(filteredQuestions, func(q *Question) bool {
 				return strings.Contains(q.QNAME, question.QNAME)
 			})
 
@@ -134,6 +135,7 @@ func EncodeQuestions(questions []Question) ([]byte, error) {
 				return []byte{}, err
 			}
 
+			question.Size = len(b)
 			buf = append(buf, b...)
 			continue
 		}
@@ -141,7 +143,9 @@ func EncodeQuestions(questions []Question) ([]byte, error) {
 		if err != nil {
 			return []byte{}, err
 		}
+		question.Size = len(b)
 		buf = append(buf, b...)
+
 	}
 
 	return buf, nil
@@ -199,7 +203,7 @@ func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing
 	return -1
 }
 
-func sumQuestionPayloadOffsetUntilIdx(questions []Question, idx int) int {
+func sumQuestionPayloadOffsetUntilIdx(questions []*Question, idx int) int {
 	const headerSize = 12
 	s := 0
 	for i := range idx {

@@ -44,46 +44,64 @@ type Answer struct {
 }
 
 // Useful for debugging and testing, but the client will never send an answer...
-func DecodeAnswer(payload []byte, questions []Question) (*Answer, error) {
-	START_POS := sumQuestionPayloadOffsetUntilIdx(questions, len(questions))
-	domain, domainSize, err := decodeDomainName(payload[START_POS:])
-	if err != nil {
-		return nil, fmt.Errorf("failed to decoded the domain, cause: %s", err)
+func DecodeAnswers(payload []byte, questions []*Question, ancount int) ([]Answer, error) {
+	answers := make([]Answer, ancount)
+
+	for i := range ancount {
+		previousPayloadOffset := sumAnswerPayloadOffsetUntilIdx(answers, questions, i)
+		startPos := previousPayloadOffset
+		// check for pointers
+		firstByte := payload[startPos]
+		flaggedAsCompressed := firstByte>>6 == 0x03
+		if flaggedAsCompressed {
+			fmt.Println("flaggedAsCompressed")
+			// pointer
+			fmt.Println("firstByte: ", firstByte)
+			startPos = int(firstByte & 0x3F)
+		}
+		fmt.Println("startPos: ", startPos)
+		domain, domainSize, err := decodeDomainName(payload[startPos:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to decoded the domain, cause: %s", err)
+		}
+
+		typePosition := previousPayloadOffset + domainSize
+		ttype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
+		if err != nil {
+			return nil, fmt.Errorf("could not parse the QTYPE, cause: %s", err)
+		}
+
+		classPosition := previousPayloadOffset + domainSize + 2
+		class, err := getRecordClassString(binary.BigEndian.Uint16(payload[classPosition:]))
+		if err != nil {
+			return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
+		}
+
+		ttlPosition := previousPayloadOffset + domainSize + 4
+		ttl := binary.BigEndian.Uint32(payload[ttlPosition:])
+
+		rdlengthPosition := previousPayloadOffset + domainSize + 8
+		rdlength := binary.BigEndian.Uint16(payload[rdlengthPosition:])
+
+		rdataPosition := previousPayloadOffset + domainSize + 10
+		endRdataPosition := rdataPosition + int(rdlength)
+		rdata := decodeData(payload[rdataPosition:endRdataPosition], int(rdlength))
+
+		answers[i] = Answer{
+			NAME:     domain,
+			TYPE:     ttype,
+			CLASS:    class,
+			TTL:      int32(ttl),
+			RDLENGTH: rdlength,
+			RDATA:    rdata,
+			Size:     domainSize + 2 + 2 + 4 + 2 + 4,
+			Compress: flaggedAsCompressed,
+		}
 	}
-
-	typePosition := START_POS + domainSize
-	ttype, err := getRecordTypeString(binary.BigEndian.Uint16(payload[typePosition:]))
-	if err != nil {
-		return nil, fmt.Errorf("could not parse the QTYPE, cause: %s", err)
-	}
-
-	classPosition := START_POS + domainSize + 2
-	class, err := getRecordClassString(binary.BigEndian.Uint16(payload[classPosition:]))
-	if err != nil {
-		return nil, fmt.Errorf("could not parse the QCLASS, cause: %s", err)
-	}
-
-	ttlPosition := START_POS + domainSize + 4
-	ttl := binary.BigEndian.Uint32(payload[ttlPosition:])
-
-	rdlengthPosition := START_POS + domainSize + 8
-	rdlength := binary.BigEndian.Uint16(payload[rdlengthPosition:])
-
-	rdataPosition := START_POS + domainSize + 10
-	endRdataPosition := rdataPosition + int(rdlength)
-	rdata := decodeData(payload[rdataPosition:endRdataPosition], int(rdlength))
-
-	return &Answer{
-		NAME:     domain,
-		TYPE:     ttype,
-		CLASS:    class,
-		TTL:      int32(ttl),
-		RDLENGTH: rdlength,
-		RDATA:    rdata,
-	}, nil
+	return answers, nil
 }
 
-func EncodeAnswers(answers []Answer, questions []Question) ([]byte, error) {
+func EncodeAnswers(answers []Answer, questions []*Question) ([]byte, error) {
 	var buf []byte
 	for i, answer := range answers {
 		if answer.Compress {
@@ -93,16 +111,20 @@ func EncodeAnswers(answers []Answer, questions []Question) ([]byte, error) {
 			})
 			parentAnswer := answers[parentAnswerIdx]
 
+			fmt.Println("questions on answers: ", questions)
+			fmt.Println("sum size: ", sumAnswerPayloadOffsetUntilIdx(answers, questions, parentAnswerIdx))
 			pointerOffset := findCompressionPointerOffset(
 				strings.SplitSeq(parentAnswer.NAME, "."),
 				strings.Split(answer.NAME, "."),
 				sumAnswerPayloadOffsetUntilIdx(answers, questions, parentAnswerIdx),
 			)
 
+			fmt.Println("pointerOffset before flag", pointerOffset)
 			// set 2 first bits to 1 as the flag to identify a compression pointer
 			pointerOffset |= 1 << 7
 			pointerOffset |= 1 << 6
 
+			fmt.Println("pointerOffset", pointerOffset)
 			b, err := answer.EncodeAnswer([]byte{byte(pointerOffset)})
 			if err != nil {
 				return []byte{}, err
@@ -198,13 +220,12 @@ func decodeData(buf []byte, length int) string {
 	return str
 }
 
-func sumAnswerPayloadOffsetUntilIdx(answers []Answer, questions []Question, idx int) int {
-	const headerSize = 12
+func sumAnswerPayloadOffsetUntilIdx(answers []Answer, questions []*Question, idx int) int {
 	questionsSize := sumQuestionPayloadOffsetUntilIdx(questions, len(questions))
 	s := 0
 	for i := range idx {
 		s += answers[i].Size
 	}
 
-	return s + questionsSize + headerSize
+	return s + questionsSize
 }

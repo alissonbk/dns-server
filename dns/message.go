@@ -6,11 +6,8 @@ import (
 )
 
 type Message struct {
-	Header *Header
-	// keeping the single ones just for testing
-	Question  *Question
-	Answer    *Answer
-	Questions []Question
+	Header    Header
+	Questions []*Question
 	Answers   []Answer
 }
 
@@ -21,19 +18,22 @@ func DecodeMessage(payload []byte) (*Message, error) {
 		return message, err
 	}
 	message.Header = decodedHeader
+	fmt.Printf("decoded header %v\n", decodedHeader)
 
 	decodedQuestions, err := DecodeQuestions(payload, int(decodedHeader.QDCOUNT))
 	if err != nil {
 		return message, err
 	}
 	message.Questions = decodedQuestions
+	fmt.Println("decoded questions ", decodedQuestions)
 
 	// FIXME: handle multiple and fix start size from multiple questions
-	decodedAnswers, err := DecodeAnswer(payload, decodedQuestions)
+	decodedAnswers, err := DecodeAnswers(payload, decodedQuestions, int(decodedHeader.ANCOUNT))
 	if err != nil {
 		return message, err
 	}
-	message.Answers = []Answer{*decodedAnswers}
+	fmt.Println("decoded answers ", decodedAnswers)
+	message.Answers = decodedAnswers
 
 	return message, nil
 }
@@ -51,6 +51,7 @@ func (m *Message) EncodeMessage() ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
+	fmt.Println("questions after beeing encoded: ", m.Questions[0], m.Questions[1])
 	// fmt.Println("question: ", question)
 	fmt.Println("questions encoded: ", hex.EncodeToString(questions))
 	buf = append(buf, questions...)
@@ -59,6 +60,7 @@ func (m *Message) EncodeMessage() ([]byte, error) {
 	if err != nil {
 		return []byte{}, err
 	}
+	fmt.Println("answers encoded: ", hex.EncodeToString(answers))
 	// fmt.Println("answer: ", answer)
 	// fmt.Println("answer encoded: ", hex.EncodeToString(answer))
 	buf = append(buf, answers...)
