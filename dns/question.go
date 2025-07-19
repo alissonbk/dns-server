@@ -63,7 +63,7 @@ func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
 	questions := make([]Question, qdcount)
 
 	for i := range qdcount {
-		previousPayloadOffset := sumPayloadOffsetUntilParentDomainName(questions, i)
+		previousPayloadOffset := sumQuestionPayloadOffsetUntilIdx(questions, i)
 		startPos := previousPayloadOffset
 		// check for pointers
 		firstByte := payload[startPos : startPos+1][0]
@@ -110,27 +110,19 @@ func DecodeQuestions(payload []byte, qdcount int) ([]Question, error) {
 func EncodeQuestions(questions []Question) ([]byte, error) {
 	var buf []byte
 	for i, question := range questions {
-		if i == 0 {
-			b, err := question.EncodeQuestion([]byte{})
-			if err != nil {
-				return []byte{}, err
-			}
-			buf = b
-			continue
-		}
 		// still need to handle the case where it has a sequence of labels, ending with a pointer
 		if question.Compress {
-			filteredQuestions := filterIndex(questions, i)
+			filteredQuestions := filterIndexOut(questions, i)
 			parentQuestionIdx := slices.IndexFunc(filteredQuestions, func(q Question) bool {
 				return strings.Contains(q.QNAME, question.QNAME)
 			})
 
 			parentQuestion := questions[parentQuestionIdx]
-			// still needs to sum with all the payload before it
+
 			pointerOffset := findCompressionPointerOffset(
 				strings.SplitSeq(parentQuestion.QNAME, "."),
 				strings.Split(question.QNAME, "."),
-				sumPayloadOffsetUntilParentDomainName(questions, parentQuestionIdx),
+				sumQuestionPayloadOffsetUntilIdx(questions, parentQuestionIdx),
 			)
 
 			// set 2 first bits to 1 as the flag to identify a compression pointer
@@ -207,7 +199,7 @@ func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing
 	return -1
 }
 
-func sumPayloadOffsetUntilParentDomainName(questions []Question, idx int) int {
+func sumQuestionPayloadOffsetUntilIdx(questions []Question, idx int) int {
 	const headerSize = 12
 	s := 0
 	for i := range idx {

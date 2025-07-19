@@ -29,7 +29,7 @@ func DecodeMessage(payload []byte) (*Message, error) {
 	message.Questions = decodedQuestions
 
 	// FIXME: handle multiple and fix start size from multiple questions
-	decodedAnswers, err := DecodeAnswer(payload, decodedQuestions[0].Size)
+	decodedAnswers, err := DecodeAnswer(payload, decodedQuestions)
 	if err != nil {
 		return message, err
 	}
@@ -39,6 +39,7 @@ func DecodeMessage(payload []byte) (*Message, error) {
 }
 
 func (m *Message) EncodeMessage() ([]byte, error) {
+	fmt.Println("message: ", m)
 	buf, err := m.Header.EncodeHeader()
 	if err != nil {
 		return []byte{}, err
@@ -54,13 +55,13 @@ func (m *Message) EncodeMessage() ([]byte, error) {
 	fmt.Println("questions encoded: ", hex.EncodeToString(questions))
 	buf = append(buf, questions...)
 
-	answer, err := m.Answer.EncodeAnswer()
+	answers, err := EncodeAnswers(m.Answers, m.Questions)
 	if err != nil {
 		return []byte{}, err
 	}
 	// fmt.Println("answer: ", answer)
 	// fmt.Println("answer encoded: ", hex.EncodeToString(answer))
-	buf = append(buf, answer...)
+	buf = append(buf, answers...)
 
 	fmt.Println("full message: ", hex.EncodeToString(buf))
 	return buf, nil

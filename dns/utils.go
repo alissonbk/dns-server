@@ -203,7 +203,7 @@ func bytesFromIPAdress(ipaddr string) ([]byte, error) {
 	return buf, nil
 }
 
-func filterIndex[T interface{}](lst []T, idx int) []T {
+func filterIndexOut[T interface{}](lst []T, idx int) []T {
 	var l []T
 	for i, item := range lst {
 		if i != idx {

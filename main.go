@@ -7,21 +7,7 @@ import (
 	"github.com/alissonbk/dns-server/dns"
 )
 
-func main() {
-	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:2053")
-	if err != nil {
-		fmt.Println("Failed to resolve UDP address:", err)
-		return
-	}
-
-	udpConn, err := net.ListenUDP("udp", udpAddr)
-	if err != nil {
-		fmt.Println("Failed to bind to address:", err)
-		return
-	}
-	defer udpConn.Close()
-
-	buf := make([]byte, 512)
+func createStaticMessage() *dns.Message {
 	header := &dns.Header{
 		ID:      1234,
 		QR:      true,
@@ -37,34 +23,60 @@ func main() {
 		NSCOUNT: 0,
 		ARCOUNT: 0,
 	}
-	question1 := &dns.Question{
+	question1 := dns.Question{
 		QNAME:    "fodase.google.com",
 		QTYPE:    "A",
 		QCLASS:   "IN",
 		Compress: false,
 	}
-	question2 := &dns.Question{
+	question2 := dns.Question{
 		QNAME:    "google.com",
 		QTYPE:    "NULL",
 		QCLASS:   "IN",
 		Compress: true,
 	}
-	answer := &dns.Answer{
-		NAME:     "google.com",
+	answer1 := dns.Answer{
+		NAME:     "fodase.google.com",
 		TYPE:     "A",
+		CLASS:    "IN",
+		TTL:      60,
+		RDLENGTH: 4,
+		RDATA:    "4.4.4.4",
+	}
+	answer2 := dns.Answer{
+		NAME:     "google.com",
+		TYPE:     "SOA",
 		CLASS:    "IN",
 		TTL:      60,
 		RDLENGTH: 4,
 		RDATA:    "8.8.8.8",
 	}
 
-	message := &dns.Message{
+	return &dns.Message{
 		Header:    header,
-		Questions: []dns.Question{*question1, *question2},
-		Answer:    answer,
+		Questions: []dns.Question{question1, question2},
+		Answers:   []dns.Answer{answer1, answer2},
 	}
 
-	staticResponse, err := message.EncodeMessage()
+}
+
+func main() {
+	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:2053")
+	if err != nil {
+		fmt.Println("Failed to resolve UDP address:", err)
+		return
+	}
+
+	udpConn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		fmt.Println("Failed to bind to address:", err)
+		return
+	}
+	defer udpConn.Close()
+
+	buf := make([]byte, 512)
+	staticResponse, err := createStaticMessage().EncodeMessage()
+
 	if err != nil {
 		panic("could not build the static response, cause: " + err.Error())
 	}
@@ -80,7 +92,7 @@ func main() {
 	}
 	fmt.Println("decodedQuestions: ", decodedQuestions)
 
-	decodedAnswer, err := dns.DecodeAnswer(staticResponse, decodedQuestions[0].Size)
+	decodedAnswer, err := dns.DecodeAnswer(staticResponse, decodedQuestions)
 	if err != nil {
 		panic(err)
 	}

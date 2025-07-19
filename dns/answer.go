@@ -3,7 +3,9 @@ package dns
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 )
 
 /*
@@ -35,12 +37,15 @@ type Answer struct {
 	// a variable length string of octets that describes the resource.  The format of this information varies according to the TYPE and CLASS of the resource record.
 	// for an A record would be a 4byte ipv4 address
 	RDATA string
+	// Makes compression easier as NAME and RDATA has a dynamic size
+	Size int
+	// Should compress domain name
+	Compress bool
 }
 
 // Useful for debugging and testing, but the client will never send an answer...
-func DecodeAnswer(payload []byte, questionSize int) (*Answer, error) {
-	// 12 for the header...
-	START_POS := 12 + questionSize
+func DecodeAnswer(payload []byte, questions []Question) (*Answer, error) {
+	START_POS := sumQuestionPayloadOffsetUntilIdx(questions, len(questions))
 	domain, domainSize, err := decodeDomainName(payload[START_POS:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to decoded the domain, cause: %s", err)
@@ -78,12 +83,61 @@ func DecodeAnswer(payload []byte, questionSize int) (*Answer, error) {
 	}, nil
 }
 
-func (a *Answer) EncodeAnswer() ([]byte, error) {
-	// DOMAIN
-	buf, err := encodeDomainName(a.NAME)
-	if err != nil {
-		return buf, err
+func EncodeAnswers(answers []Answer, questions []Question) ([]byte, error) {
+	var buf []byte
+	for i, answer := range answers {
+		if answer.Compress {
+			filteredAnswers := filterIndexOut(answers, i)
+			parentAnswerIdx := slices.IndexFunc(filteredAnswers, func(a Answer) bool {
+				return strings.Contains(a.NAME, answer.NAME)
+			})
+			parentAnswer := answers[parentAnswerIdx]
+
+			pointerOffset := findCompressionPointerOffset(
+				strings.SplitSeq(parentAnswer.NAME, "."),
+				strings.Split(answer.NAME, "."),
+				sumAnswerPayloadOffsetUntilIdx(answers, questions, parentAnswerIdx),
+			)
+
+			// set 2 first bits to 1 as the flag to identify a compression pointer
+			pointerOffset |= 1 << 7
+			pointerOffset |= 1 << 6
+
+			b, err := answer.EncodeAnswer([]byte{byte(pointerOffset)})
+			if err != nil {
+				return []byte{}, err
+			}
+
+			buf = append(buf, b...)
+			continue
+		}
+		encoded, err := answer.EncodeAnswer([]byte{})
+		if err != nil {
+			return []byte{}, err
+		}
+		buf = append(buf, encoded...)
 	}
+
+	return buf, nil
+}
+
+func (a *Answer) EncodeAnswer(compressedDomain []byte) ([]byte, error) {
+	var buf []byte
+	domainSize := 0
+	// DOMAIN
+	if len(compressedDomain) > 0 {
+		buf = compressedDomain
+		domainSize = 1
+	} else {
+		b, err := encodeDomainName(a.NAME)
+		if err != nil {
+			return buf, err
+		}
+		domainSize = len(b)
+		buf = b
+	}
+
+	fmt.Println("encoded domainsize: ", domainSize)
 
 	// TYPE
 	recordType, err := getRecordTypeUint16(a.TYPE)
@@ -142,4 +196,15 @@ func decodeData(buf []byte, length int) string {
 	}
 
 	return str
+}
+
+func sumAnswerPayloadOffsetUntilIdx(answers []Answer, questions []Question, idx int) int {
+	const headerSize = 12
+	questionsSize := sumQuestionPayloadOffsetUntilIdx(questions, len(questions))
+	s := 0
+	for i := range idx {
+		s += answers[i].Size
+	}
+
+	return s + questionsSize + headerSize
 }
