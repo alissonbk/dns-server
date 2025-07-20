@@ -114,20 +114,16 @@ func EncodeAnswers(answers []Answer, questions []*Question) ([]byte, error) {
 			})
 			parentAnswer := answers[parentAnswerIdx]
 
-			fmt.Println("questions on answers: ", questions)
-			fmt.Println("sum size: ", sumAnswerPayloadOffsetUntilIdx(answers, questions, parentAnswerIdx))
 			pointerOffset := findCompressionPointerOffset(
 				strings.SplitSeq(parentAnswer.NAME, "."),
 				strings.Split(answer.NAME, "."),
 				sumAnswerPayloadOffsetUntilIdx(answers, questions, parentAnswerIdx),
 			)
 
-			fmt.Println("pointerOffset before flag", pointerOffset)
 			// set 2 first bits to 1 as the flag to identify a compression pointer
 			pointerOffset |= 1 << 7
 			pointerOffset |= 1 << 6
 
-			fmt.Println("pointerOffset", pointerOffset)
 			b, err := answer.EncodeAnswer([]byte{byte(pointerOffset)})
 			if err != nil {
 				return []byte{}, err

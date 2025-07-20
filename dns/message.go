@@ -39,7 +39,7 @@ func DecodeMessage(payload []byte) (*Message, error) {
 }
 
 func (m *Message) EncodeMessage() ([]byte, error) {
-	fmt.Println("message: ", m)
+	m.Print()
 	buf, err := m.Header.EncodeHeader()
 	if err != nil {
 		return []byte{}, err
@@ -67,4 +67,13 @@ func (m *Message) EncodeMessage() ([]byte, error) {
 
 	fmt.Println("full message: ", hex.EncodeToString(buf))
 	return buf, nil
+}
+
+func (m *Message) Print() {
+	questions := make([]Question, len(m.Questions))
+	for i := range len(m.Questions) {
+		questions[i] = *m.Questions[i]
+	}
+
+	fmt.Printf("message: \n header: %v\n questions: %v\n answers: %v\n\n", m.Header, questions, m.Answers)
 }

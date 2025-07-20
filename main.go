@@ -24,13 +24,15 @@ func createStaticMessage() *dns.Message {
 		ARCOUNT: 0,
 	}
 	question1 := &dns.Question{
-		QNAME:    "fodase.google.com",
+		// QNAME:    "fodase.google.com",
+		QNAME:    "google.com",
 		QTYPE:    "A",
 		QCLASS:   "IN",
 		Compress: false,
 	}
 	question2 := &dns.Question{
-		QNAME:    "google.com",
+		QNAME: "fodase.google.com",
+		// QNAME:    "google.com",
 		QTYPE:    "NULL",
 		QCLASS:   "IN",
 		Compress: true,
@@ -84,7 +86,7 @@ func main() {
 	if err != nil {
 		panic("could not decode the static response, cause: " + err.Error())
 	}
-	fmt.Println("decoded message ", decodedMessage)
+	decodedMessage.Print()
 
 	for {
 		size, source, err := udpConn.ReadFromUDP(buf)

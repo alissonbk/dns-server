@@ -51,7 +51,12 @@ type Question struct {
 	QTYPE string
 	// Class  (16 bits)
 	QCLASS string
-	// compress the domain name (need to have QNAME matching previous QNAME questions in the payload context)
+	/**
+	* FIXME: need to try to compress every question, and handle cases that it can't
+	* compress the domain name (need to have QNAME matching previous QNAME questions in the payload context)
+	* the order of the questions will mater as it points to a location in the full payload, it cannot point to the "future",
+	* so to compress need to have matching names before the question
+	 */
 	Compress bool
 	// Useful to facilitate using pointer in the compression
 	DomainNameSize int
@@ -115,7 +120,7 @@ func EncodeQuestions(questions []*Question) ([]byte, error) {
 		if (*question).Compress {
 			filteredQuestions := filterIndexOut(questions, i)
 			parentQuestionIdx := slices.IndexFunc(filteredQuestions, func(q *Question) bool {
-				return strings.Contains(q.QNAME, question.QNAME)
+				return strings.Contains(q.QNAME, question.QNAME) || strings.Contains(question.QNAME, q.QNAME)
 			})
 
 			parentQuestion := questions[parentQuestionIdx]
@@ -130,7 +135,12 @@ func EncodeQuestions(questions []*Question) ([]byte, error) {
 			pointerOffset |= 1 << 7
 			pointerOffset |= 1 << 6
 
-			b, err := question.EncodeQuestion([]byte{byte(pointerOffset)})
+			compressedBytes, err := handleBiggerCompressionDomainName(parentQuestion.QNAME, question.QNAME, byte(pointerOffset))
+			if err != nil {
+				return []byte{}, fmt.Errorf("failed to handle bigger compression domain, cause: %s", err)
+			}
+
+			b, err := question.EncodeQuestion(compressedBytes)
 			if err != nil {
 				return []byte{}, err
 			}
@@ -191,6 +201,7 @@ func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing
 		for _, compressingPart := range splitCompressing {
 			if parentPart == compressingPart {
 				if discardSize > 0 {
+					fmt.Println("here")
 					return payloadOffset + discardSize
 				}
 				return payloadOffset + discardSize
@@ -201,6 +212,24 @@ func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing
 	}
 
 	return -1
+}
+
+// handles the case where the compressed have a bigger domain name than the parent
+// (the pointer it's always in the end, as it will have the null byte)
+func handleBiggerCompressionDomainName(parentDomain string, compressingDomain string, formattedPointer byte) ([]byte, error) {
+	if len([]rune(parentDomain)) >= len([]rune(compressingDomain)) {
+		return []byte{formattedPointer}, nil
+	}
+
+	remainingPart := strings.ReplaceAll(compressingDomain, parentDomain, "")
+	encodedPart, err := encodeDomainName(remainingPart)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	encodedPart = encodedPart[:len(encodedPart)-1]
+	encodedPart[len(encodedPart)-1] = formattedPointer
+	return encodedPart, nil
 }
 
 func sumQuestionPayloadOffsetUntilIdx(questions []*Question, idx int) int {
