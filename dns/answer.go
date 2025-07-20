@@ -54,15 +54,18 @@ func DecodeAnswers(payload []byte, questions []*Question, ancount int) ([]Answer
 		firstByte := payload[startPos]
 		flaggedAsCompressed := firstByte>>6 == 0x03
 		if flaggedAsCompressed {
-			fmt.Println("flaggedAsCompressed")
 			// pointer
-			fmt.Println("firstByte: ", firstByte)
 			startPos = int(firstByte & 0x3F)
 		}
-		fmt.Println("startPos: ", startPos)
+
 		domain, domainSize, err := decodeDomainName(payload[startPos:])
 		if err != nil {
 			return nil, fmt.Errorf("failed to decoded the domain, cause: %s", err)
+		}
+
+		// FIXME: support pointers with extra name
+		if flaggedAsCompressed {
+			domainSize = 1
 		}
 
 		typePosition := previousPayloadOffset + domainSize
