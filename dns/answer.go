@@ -50,22 +50,10 @@ func DecodeAnswers(payload []byte, questions []*Question, ancount int) ([]Answer
 	for i := range ancount {
 		previousPayloadOffset := sumAnswerPayloadOffsetUntilIdx(answers, questions, i)
 		startPos := previousPayloadOffset
-		// check for pointers
-		firstByte := payload[startPos]
-		flaggedAsCompressed := firstByte>>6 == 0x03
-		if flaggedAsCompressed {
-			// pointer
-			startPos = int(firstByte & 0x3F)
-		}
 
-		domain, domainSize, err := decodeDomainName(payload[startPos:])
+		domain, domainSize, useCompression, err := decodeDomainName(payload, startPos)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decoded the domain, cause: %s", err)
-		}
-
-		// FIXME: support pointers with extra name
-		if flaggedAsCompressed {
-			domainSize = 1
 		}
 
 		typePosition := previousPayloadOffset + domainSize
@@ -98,7 +86,7 @@ func DecodeAnswers(payload []byte, questions []*Question, ancount int) ([]Answer
 			RDLENGTH: rdlength,
 			RDATA:    rdata,
 			Size:     domainSize + 2 + 2 + 4 + 2 + 4,
-			Compress: flaggedAsCompressed,
+			Compress: useCompression,
 		}
 	}
 	return answers, nil

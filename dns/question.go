@@ -71,21 +71,9 @@ func DecodeQuestions(payload []byte, qdcount int) ([]*Question, error) {
 		previousPayloadOffset := sumQuestionPayloadOffsetUntilIdx(questions, i)
 		startPos := previousPayloadOffset
 
-		// check for pointers
-		firstByte := payload[startPos]
-		flaggedAsCompressed := firstByte>>6 == 0x03
-		if flaggedAsCompressed {
-			// pointer
-			startPos = int(firstByte & 0x3F)
-		}
-
-		domain, domainSize, err := decodeDomainName(payload[startPos:])
+		domain, domainSize, useCompression, err := decodeDomainName(payload, startPos)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode domain name, cause: %s", err)
-		}
-
-		if flaggedAsCompressed {
-			domainSize = 1
 		}
 
 		typePosition := previousPayloadOffset + domainSize
@@ -106,7 +94,7 @@ func DecodeQuestions(payload []byte, qdcount int) ([]*Question, error) {
 			QCLASS:         class,
 			DomainNameSize: domainSize,
 			Size:           domainSize + 4,
-			Compress:       flaggedAsCompressed,
+			Compress:       useCompression,
 		}
 	}
 
@@ -201,7 +189,6 @@ func findCompressionPointerOffset(splitParent iter.Seq[string], splitCompressing
 		for _, compressingPart := range splitCompressing {
 			if parentPart == compressingPart {
 				if discardSize > 0 {
-					fmt.Println("here")
 					return payloadOffset + discardSize
 				}
 				return payloadOffset + discardSize

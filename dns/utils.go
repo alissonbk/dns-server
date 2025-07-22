@@ -47,23 +47,41 @@ func encodeDomainName(name string) ([]byte, error) {
 }
 
 // will recieve the buffer from 12:n beeing 12 the end of the header section;
-// returns the domainName as string, size and error
+// returns the domainName as string, size, bool indicating compression and error
 // dont need to remove the last dot as the real domain name always has this final dot
-func decodeDomainName(buf []byte) (string, int, error) {
+func decodeDomainName(buf []byte, startPos int) (string, int, bool, error) {
 	str := ""
-	curr := 0
-	for curr < 256 && buf[curr] != 0x00 {
-		n := int(buf[curr])
-		if n > 63 {
-			return "", 0, fmt.Errorf("label has more than 63 octets")
+	curr := startPos
+	usesCompression := false
+	sizeUntilCompression := 0
+
+	for len(str) < 255+3 && buf[curr] != 0x00 {
+		firstByte := int(buf[curr])
+		isCompressed := firstByte>>6 == 0x03
+		if isCompressed {
+			usesCompression = true
+			// pointer is the "last" 6 bits from the length byte
+			curr = int(firstByte & 0x3F)
+			sizeUntilCompression = len([]rune(str))
+			continue
 		}
-		str += string(buf[curr : curr+n+1])
+		if firstByte > 63 {
+			return "", 0, usesCompression, fmt.Errorf("label has more than 63 octets")
+		}
+		str += string(buf[curr+1 : curr+firstByte+1])
 		str += "."
-		curr += n + 1
+		curr += firstByte + 1
 	}
 
-	// taking account the 0x00 byte
-	return str, curr + 1, nil
+	// weird that the str
+	size := func() int {
+		firstLengthByte := 1
+		if usesCompression {
+			return sizeUntilCompression + firstLengthByte
+		}
+		return len([]rune(str)) + firstLengthByte
+	}()
+	return str, size, usesCompression, nil
 }
 
 func getRecordTypeUint16(recordType string) (uint16, error) {
